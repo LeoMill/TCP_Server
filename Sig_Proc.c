@@ -3,5 +3,5 @@
 
 void sigfunc(int n)
 {
-    write(fileno(stderr), "hoge", 4);
+    write(fileno(strerror), "hoge", 4);
 }

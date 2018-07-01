@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+#include <fcntl.h>
 
 void print_port_num(int sock)
 {
@@ -26,36 +29,71 @@ void print_port_num(int sock)
 
 int main()
 {
-    int sock_listen;
-    struct sockaddr_in addr;
+    int sock0;
     struct sockaddr_in client;
     socklen_t len;
-    int sock_client;
+    int sock;
+    struct addrinfo hints, *res;
+    int err;
+    int fd;
+    int n, ret;
+    char buf[65536];
 
-    sock_listen = socket(AF_INET, SOCK_STREAM, 0);
-
-    //addr.sin_family = AF_INET;
-    //addr.sin_port = htons(12345);
-    //addr.sin_addr.s_addr = INADDR_ANY;
-    //bind(sock_listen, (struct sockaddr *)&addr, sizeof(addr));
-    if(listen(sock_listen, 5) != 0)
+    fd = open("hogesave.txt", O_WRONLY | O_CREAT, 0600);
+    if (fd < 0)
     {
-        perror("listen");
+        perror("open");
         return 1;
     }
-    print_port_num(sock_listen);
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_socktype = SOCK_STREAM;
+    err = getaddrinfo(NULL, "12345", &hints, &res);
+    if (err != 0)
+    {
+        printf("getaddrinfo : %s\n", gai_strerror(err));
+        return 1;
+    }
+
+    sock0 = socket(res->ai_family, res->ai_socktype, 0);
+    if(sock0 < 0)
+    {
+        perror("socket");
+        return 1;
+    }
+
+    if(bind(sock0, res->ai_addr, res->ai_addrlen) != 0)
+    {
+        perror("bind");
+        return 1;
+    }
+
+    freeaddrinfo(res);
+
+    listen(sock0, 5);
 
     len = sizeof(client);
-    sock_client = accept(sock_listen, (struct sockaddr *)&client, &len);
-    if(sock_client < 0)
+    sock = accept(sock0, (struct sockaddr *)&client, &len);
+    if(sock < 0)
     {
         perror("accept");
         return 1;
     }
 
-    write(sock_client, "HELLO\n", 6);
-    close(sock_client);
-    close(sock_listen);
+    while((n = read(sock, buf, sizeof(buf))) > 0)
+    {
+        ret = write(fd, buf, n);
+        if (ret < 1)
+        {
+            perror("write");
+            break;
+        }
+    }
+
+    close(sock);
+    close(sock0);
 
     return 0;
 }
